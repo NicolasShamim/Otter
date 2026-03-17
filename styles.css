@@ -1,0 +1,774 @@
+/* ============================================================
+   STYLES.CSS — Personal Duties Dashboard
+   Sections:
+   1.  Variables & Reset
+   2.  Layout
+   3.  Login Overlay
+   4.  Sidebar
+   5.  Page Header & Stats
+   6.  Toolbar (filter + sort)
+   7.  Task Cards
+   8.  Empty State
+   9.  Add Task Form
+   10. Archive & Notes
+   11. Settings Page
+   12. Utilities & Animations
+   ============================================================ */
+
+
+/* ── 1. VARIABLES & RESET ──────────────────────────────────── */
+:root {
+  --bg:             #f5f3ef;
+  --surface:        #ffffff;
+  --border:         #e4e0d8;
+  --text:           #1a1814;
+  --text-muted:     #8a8580;
+  --accent:         #2a2522;
+  --accent-light:   #f0ece4;
+  --done-color:     #6b9e78;
+  --due-color:      #c49a30;
+  --overdue-color:  #c0553a;
+  --work-color:     #4a72a8;
+  --personal-color: #8a6bbf;
+
+  --font-display: 'DM Serif Display', Georgia, serif;
+  --font-body:    'DM Sans', sans-serif;
+
+  --sidebar-w: 220px;
+  --radius:    12px;
+  --radius-sm: 8px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--font-body);
+  background: var(--bg);
+  color: var(--text);
+  display: flex;
+  min-height: 100vh;
+  line-height: 1.5;
+}
+
+
+/* ── 2. LAYOUT ─────────────────────────────────────────────── */
+.sidebar {
+  width: var(--sidebar-w);
+  min-height: 100vh;
+  background: var(--accent);
+  display: flex;
+  flex-direction: column;
+  padding: 32px 20px;
+  position: fixed;
+  top: 0; left: 0; bottom: 0;
+}
+
+.content {
+  margin-left: var(--sidebar-w);
+  flex: 1;
+  padding: 48px 52px;
+  max-width: 900px;
+}
+
+
+/* ── 3. LOGIN OVERLAY ──────────────────────────────────────── */
+.login-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.3s ease;
+}
+
+.login-overlay.hidden { display: none !important; }
+
+.login-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 52px 48px;
+  width: 100%;
+  max-width: 400px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.07);
+}
+
+.login-logo-dot {
+  display: block;
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+  margin: 0 auto 24px;
+}
+
+.login-title {
+  font-family: var(--font-display);
+  font-size: 2.2rem;
+  font-weight: 400;
+  margin-bottom: 6px;
+  text-align: center;
+}
+
+.login-sub {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 28px;
+  text-align: center;
+}
+
+.login-field { margin-bottom: 16px; }
+
+.login-label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-muted);
+  margin-bottom: 7px;
+}
+
+.login-input {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  color: var(--text);
+  padding: 11px 14px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.login-input:focus { border-color: var(--accent); }
+
+.login-error {
+  font-size: 0.8rem;
+  color: var(--overdue-color);
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  background: #fdf1ee;
+  border-radius: var(--radius-sm);
+  border: 1px solid #f3d0c8;
+}
+
+.login-btn {
+  width: 100%;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  font-family: var(--font-body);
+  font-size: 0.92rem;
+  font-weight: 500;
+  padding: 13px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  margin-top: 8px;
+  letter-spacing: 0.02em;
+  transition: opacity 0.15s;
+}
+
+.login-btn:hover { opacity: 0.85; }
+
+
+/* ── 4. SIDEBAR ────────────────────────────────────────────── */
+.sidebar-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 48px;
+}
+
+.logo-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: var(--bg);
+  opacity: 0.8;
+}
+
+.logo-text {
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  color: #fff;
+  letter-spacing: 0.02em;
+}
+
+.nav-links {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: rgba(255,255,255,0.55);
+  font-size: 0.88rem;
+  font-weight: 400;
+  transition: background 0.15s, color 0.15s;
+  user-select: none;
+}
+
+.nav-item:hover  { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.85); }
+.nav-item.active { background: rgba(255,255,255,0.13); color: #fff; font-weight: 500; }
+
+.nav-icon { font-size: 0.95rem; width: 18px; text-align: center; }
+
+/* Overdue badge on the Archive nav item */
+.nav-badge {
+  margin-left: auto;
+  background: var(--overdue-color);
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 99px;
+  min-width: 18px;
+  text-align: center;
+}
+
+.nav-badge.hidden { display: none; }
+
+.sidebar-footer {
+  padding-top: 20px;
+  border-top: 1px solid rgba(255,255,255,0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.footer-name {
+  font-size: 0.82rem;
+  color: rgba(255,255,255,0.6);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.logout-btn {
+  background: none;
+  border: 1px solid rgba(255,255,255,0.15);
+  color: rgba(255,255,255,0.35);
+  font-family: var(--font-body);
+  font-size: 0.72rem;
+  padding: 5px 10px;
+  border-radius: 99px;
+  cursor: pointer;
+  letter-spacing: 0.04em;
+  transition: all 0.15s;
+  width: fit-content;
+}
+
+.logout-btn:hover { border-color: rgba(255,255,255,0.4); color: rgba(255,255,255,0.7); }
+
+
+/* ── 5. PAGE HEADER & STATS ────────────────────────────────── */
+.page { display: none; animation: fadeIn 0.2s ease; }
+.page.active { display: block; }
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 28px;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.page-date {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 4px;
+}
+
+.page-title {
+  font-family: var(--font-display);
+  font-size: 2.6rem;
+  font-weight: 400;
+  line-height: 1.1;
+}
+
+.header-stats {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.stat-pill {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 14px;
+  min-width: 56px;
+}
+
+.stat-pill.done         .stat-num { color: var(--done-color); }
+.stat-pill.due          .stat-num { color: var(--due-color); }
+.stat-pill.overdue-pill .stat-num { color: var(--overdue-color); }
+
+/* Hide overdue stat when 0 */
+.stat-pill.overdue-pill.zero { opacity: 0.35; }
+
+.stat-num   { font-family: var(--font-display); font-size: 1.4rem; line-height: 1; }
+.stat-label { font-size: 0.68rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 2px; }
+
+
+/* ── 6. TOOLBAR (filter + sort) ────────────────────────────── */
+.toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.filter-bar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex: 1;
+}
+
+.filter-btn {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  padding: 6px 14px;
+  border-radius: 99px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.filter-btn:hover  { border-color: var(--accent); color: var(--text); }
+.filter-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* Small count badge inside filter button */
+.filter-count {
+  display: inline-block;
+  background: rgba(0,0,0,0.12);
+  border-radius: 99px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 0 5px;
+  margin-left: 4px;
+  line-height: 1.5;
+}
+
+.filter-btn.active .filter-count { background: rgba(255,255,255,0.25); }
+
+.sort-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.sort-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.sort-select {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+  color: var(--text);
+  padding: 6px 10px;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.sort-select:focus { border-color: var(--accent); }
+
+
+/* ── 7. TASK CARDS ─────────────────────────────────────────── */
+.task-list { display: flex; flex-direction: column; gap: 10px; }
+
+.task-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  transition: box-shadow 0.15s, transform 0.15s;
+}
+
+.task-card:hover {
+  box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+  transform: translateY(-1px);
+}
+
+/* Due today — subtle left accent bar */
+.task-card.due-today {
+  border-left: 3px solid var(--due-color);
+}
+
+/* Overdue — red left bar */
+.task-card.is-overdue {
+  border-left: 3px solid var(--overdue-color);
+}
+
+/* Done state */
+.task-card.is-done { opacity: 0.5; }
+.task-card.is-done .task-title { text-decoration: line-through; color: var(--text-muted); }
+
+/* Checkbox circle */
+.task-check {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  cursor: pointer;
+  flex-shrink: 0;
+  margin-top: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.task-check:hover  { border-color: var(--done-color); }
+.task-check.checked { background: var(--done-color); border-color: var(--done-color); }
+.task-check.checked::after { content: '✓'; color: #fff; font-size: 0.7rem; }
+
+.task-body { flex: 1; min-width: 0; }
+.task-title { font-size: 0.95rem; font-weight: 500; margin-bottom: 4px; }
+.task-desc  { font-size: 0.82rem; color: var(--text-muted); margin-bottom: 8px; white-space: pre-wrap; }
+
+.task-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.task-date  { font-size: 0.75rem; color: var(--text-muted); }
+
+/* "Overdue" inline tag shown in task meta */
+.task-overdue-tag {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--overdue-color);
+  background: #fdf1ee;
+  border: 1px solid #f3d0c8;
+  padding: 1px 8px;
+  border-radius: 99px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* "Due today" inline tag */
+.task-due-tag {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--due-color);
+  background: #fdf8ee;
+  border: 1px solid #f0dfa0;
+  padding: 1px 8px;
+  border-radius: 99px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.task-badge {
+  font-size: 0.68rem;
+  font-weight: 500;
+  padding: 2px 10px;
+  border-radius: 99px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.task-badge[data-category="personal"] { background: #ede8f7; color: var(--personal-color); }
+.task-badge[data-category="work"]     { background: #e5ecf7; color: var(--work-color); }
+.task-badge[data-category="urgent"]   { background: #f7ebe8; color: var(--overdue-color); }
+.task-badge[data-category="other"]    { background: var(--accent-light); color: var(--text-muted); }
+
+.task-priority {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
+.task-priority[data-priority="high"]   { color: var(--overdue-color); opacity: 1; }
+.task-priority[data-priority="medium"] { color: var(--due-color); opacity: 1; }
+.task-priority[data-priority="low"]    { color: var(--text-muted); }
+
+.task-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+
+.task-delete, .task-undo {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 5px;
+  font-size: 0.9rem;
+  line-height: 1;
+  border-radius: 6px;
+  transition: background 0.12s, color 0.12s;
+}
+
+.task-delete { color: var(--border); }
+.task-delete:hover { color: var(--overdue-color); background: #fdf1ee; }
+
+.task-undo { color: rgba(0,0,0,0.2); font-size: 1rem; }
+.task-undo:hover { color: var(--done-color); background: #edf6ef; }
+
+
+/* ── 8. EMPTY STATE ────────────────────────────────────────── */
+.empty-state { text-align: center; padding: 80px 0; }
+.empty-icon  { font-size: 2.5rem; color: var(--border); margin-bottom: 16px; }
+.empty-text  { font-family: var(--font-display); font-size: 1.2rem; color: var(--text-muted); margin-bottom: 20px; }
+
+.btn-ghost {
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--text-muted);
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  padding: 8px 20px;
+  border-radius: 99px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-ghost:hover { border-color: var(--accent); color: var(--text); }
+
+
+/* ── 9. ADD TASK FORM ──────────────────────────────────────── */
+.form-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 36px 40px;
+  max-width: 560px;
+}
+
+.form-group { margin-bottom: 22px; }
+
+.form-label {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.optional { font-weight: 400; text-transform: none; letter-spacing: 0; }
+
+.form-input {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  color: var(--text);
+  padding: 10px 14px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.form-input:focus  { border-color: var(--accent); }
+.form-textarea     { min-height: 90px; resize: vertical; }
+.form-select       { appearance: none; cursor: pointer; }
+.form-row          { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+
+.priority-group { display: flex; gap: 8px; }
+
+.priority-btn {
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-muted);
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+  padding: 7px 18px;
+  border-radius: 99px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.priority-btn:hover  { border-color: var(--accent); color: var(--text); }
+.priority-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+.btn-primary {
+  width: 100%;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  font-family: var(--font-body);
+  font-size: 0.92rem;
+  font-weight: 500;
+  padding: 13px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  letter-spacing: 0.02em;
+  transition: opacity 0.15s;
+}
+
+.btn-primary:hover { opacity: 0.85; }
+.form-success { text-align: center; font-size: 0.85rem; color: var(--done-color); margin-top: 14px; }
+
+
+/* ── 10. ARCHIVE & NOTES ───────────────────────────────────── */
+.placeholder-block {
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 24px 32px;
+  margin-bottom: 24px;
+  max-width: 520px;
+}
+
+.placeholder-title { font-family: var(--font-display); font-size: 1.05rem; margin-bottom: 6px; }
+.placeholder-sub   { font-size: 0.82rem; color: var(--text-muted); }
+
+.notes-area-wrap { max-width: 620px; }
+
+.notes-textarea {
+  width: 100%;
+  min-height: 340px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-family: var(--font-body);
+  font-size: 0.92rem;
+  color: var(--text);
+  padding: 20px 24px;
+  line-height: 1.7;
+  outline: none;
+  resize: vertical;
+  transition: border-color 0.15s;
+}
+
+.notes-textarea:focus { border-color: var(--accent); }
+
+.notes-footer {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+}
+
+.notes-hint { font-size: 0.74rem; color: var(--text-muted); }
+
+
+/* ── 11. SETTINGS PAGE ─────────────────────────────────────── */
+.settings-section { margin-bottom: 40px; }
+
+.settings-heading {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 400;
+  margin-bottom: 6px;
+}
+
+.settings-sub { font-size: 0.83rem; color: var(--text-muted); margin-bottom: 18px; }
+.settings-card { max-width: 600px; }
+
+.category-rename-grid { display: flex; flex-direction: column; gap: 16px; margin-bottom: 24px; }
+
+.cat-row { display: flex; align-items: center; gap: 16px; }
+
+.cat-swatch {
+  width: 36px; height: 36px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.cat-input-wrap { margin: 0; flex: 1; }
+
+/* Data export / import buttons */
+.data-btns { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+
+.btn-secondary {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  padding: 10px 18px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-secondary:hover { border-color: var(--accent); background: var(--accent-light); }
+.btn-import-label { display: inline-flex; align-items: center; }
+
+/* Danger zone */
+.danger-heading { color: var(--overdue-color); }
+
+.btn-danger {
+  background: none;
+  border: 1px solid var(--overdue-color);
+  color: var(--overdue-color);
+  font-family: var(--font-body);
+  font-size: 0.88rem;
+  font-weight: 500;
+  padding: 10px 20px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-danger:hover { background: var(--overdue-color); color: #fff; }
+
+
+/* ── 12. UTILITIES & ANIMATIONS ────────────────────────────── */
+.hidden { display: none !important; }
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%       { transform: translateX(-8px); }
+  40%       { transform: translateX(8px); }
+  60%       { transform: translateX(-5px); }
+  80%       { transform: translateX(5px); }
+}
+
+@media (max-width: 700px) {
+  :root { --sidebar-w: 64px; }
+
+  .logo-text, .nav-label, .footer-name, .logout-btn { display: none; }
+  .sidebar-logo { justify-content: center; margin-bottom: 32px; }
+  .nav-item      { justify-content: center; padding: 12px; }
+  .content       { padding: 32px 20px; }
+  .page-title    { font-size: 1.9rem; }
+  .form-row      { grid-template-columns: 1fr; }
+  .form-card     { padding: 24px 20px; }
+  .header-stats  { gap: 6px; }
+  .stat-pill     { padding: 6px 10px; min-width: 48px; }
+}

@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Otter</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+</head>
+<body>
+
+  <!-- ===================== LOGIN OVERLAY =====================
+       Two panels: "login" and "setup" (first-time registration).
+       JS decides which to show.
+  ============================================================ -->
+  <div class="login-overlay" id="login-overlay">
+
+    <!-- PANEL A: First-time setup (no account exists yet) -->
+    <div class="login-card" id="panel-setup">
+      <span class="login-logo-dot"></span>
+      <h1 class="login-title">Create account.</h1>
+      <p class="login-sub">Choose a username and password to protect your dashboard.</p>
+      <div class="login-field">
+        <label class="login-label">Username</label>
+        <input class="login-input" id="setup-username" type="text" placeholder="e.g. nicolas" maxlength="40" autocomplete="off" />
+      </div>
+      <div class="login-field">
+        <label class="login-label">Password</label>
+        <input class="login-input" id="setup-password" type="password" placeholder="Choose a password" />
+      </div>
+      <div class="login-field">
+        <label class="login-label">Confirm password</label>
+        <input class="login-input" id="setup-confirm" type="password" placeholder="Repeat password" />
+      </div>
+      <p class="login-error hidden" id="setup-error"></p>
+      <button class="login-btn" id="btn-setup">Create & enter →</button>
+    </div>
+
+    <!-- PANEL B: Returning user login -->
+    <div class="login-card hidden" id="panel-login">
+      <span class="login-logo-dot"></span>
+      <h1 class="login-title">Welcome back.</h1>
+      <p class="login-sub" id="login-welcome-name">Sign in to continue.</p>
+      <div class="login-field">
+        <label class="login-label">Username</label>
+        <input class="login-input" id="login-username" type="text" placeholder="Your username" autocomplete="off" />
+      </div>
+      <div class="login-field">
+        <label class="login-label">Password</label>
+        <input class="login-input" id="login-password" type="password" placeholder="Your password" />
+      </div>
+      <p class="login-error hidden" id="login-error">Incorrect username or password.</p>
+      <button class="login-btn" id="btn-login">Sign in →</button>
+    </div>
+
+  </div><!-- /login-overlay -->
+
+  <!-- ===================== SIDEBAR NAV ===================== -->
+  <nav class="sidebar">
+    <div class="sidebar-logo">
+      <span class="logo-dot"></span>
+      <span class="logo-text">Otter</span>
+    </div>
+
+    <ul class="nav-links">
+      <li class="nav-item active" data-page="agenda">
+        <span class="nav-icon">◈</span>
+        <span class="nav-label">Agenda</span>
+      </li>
+      <li class="nav-item" data-page="add">
+        <span class="nav-icon">＋</span>
+        <span class="nav-label">Add Task</span>
+      </li>
+      <li class="nav-item" data-page="archive">
+        <span class="nav-icon">◻</span>
+        <span class="nav-label">Archive</span>
+      </li>
+      <li class="nav-item" data-page="notes">
+        <span class="nav-icon">◇</span>
+        <span class="nav-label">Notes</span>
+      </li>
+      <li class="nav-item" data-page="settings">
+        <span class="nav-icon">⊙</span>
+        <span class="nav-label">Settings</span>
+      </li>
+    </ul>
+
+    <div class="sidebar-footer">
+      <span class="footer-name" id="sidebar-name"></span>
+      <button class="logout-btn" id="logout-btn" title="Sign out">↩ sign out</button>
+    </div>
+  </nav>
+
+  <!-- ===================== MAIN CONTENT ===================== -->
+  <main class="content">
+
+    <!-- ======== PAGE: AGENDA ======== -->
+    <section class="page active" id="page-agenda">
+
+      <header class="page-header">
+        <div>
+          <p class="page-date" id="today-date"></p>
+          <h1 class="page-title">Good <span id="time-greeting"></span><span id="greeting-name"></span>.</h1>
+        </div>
+        <div class="header-stats">
+          <div class="stat-pill" id="stat-pending">
+            <span class="stat-num">0</span>
+            <span class="stat-label">pending</span>
+          </div>
+          <div class="stat-pill due" id="stat-due-today">
+            <span class="stat-num">0</span>
+            <span class="stat-label">due today</span>
+          </div>
+          <div class="stat-pill overdue-pill" id="stat-overdue">
+            <span class="stat-num">0</span>
+            <span class="stat-label">overdue</span>
+          </div>
+          <div class="stat-pill done" id="stat-done">
+            <span class="stat-num">0</span>
+            <span class="stat-label">done</span>
+          </div>
+        </div>
+      </header>
+
+      <!-- Sort + Filter row -->
+      <div class="toolbar">
+        <div class="filter-bar" id="filter-bar">
+          <button class="filter-btn active" data-filter="all">All</button>
+          <button class="filter-btn" data-filter="today">Today</button>
+          <button class="filter-btn" data-filter="overdue">Overdue</button>
+          <!-- Category filters injected by JS -->
+        </div>
+        <div class="sort-wrap">
+          <label class="sort-label">Sort</label>
+          <select class="sort-select" id="sort-select">
+            <option value="date-asc">Date ↑</option>
+            <option value="date-desc">Date ↓</option>
+            <option value="priority">Priority</option>
+            <option value="added">Recently added</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="task-list" id="task-list"></div>
+
+      <div class="empty-state hidden" id="empty-state">
+        <p class="empty-icon">◈</p>
+        <p class="empty-text">No duties here.</p>
+        <button class="btn-ghost" onclick="navigateTo('add')">Add one →</button>
+      </div>
+
+    </section>
+
+    <!-- ======== PAGE: ADD TASK ======== -->
+    <section class="page" id="page-add">
+
+      <header class="page-header">
+        <div>
+          <p class="page-date">New entry</p>
+          <h1 class="page-title">Add a Task.</h1>
+        </div>
+      </header>
+
+      <div class="form-card">
+
+        <div class="form-group">
+          <label class="form-label" for="input-title">Task title</label>
+          <input class="form-input" id="input-title" type="text" placeholder="What needs to be done?" />
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="input-desc">Description <span class="optional">(optional)</span></label>
+          <textarea class="form-input form-textarea" id="input-desc" placeholder="Any extra details…"></textarea>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="input-date">Due date</label>
+            <input class="form-input" id="input-date" type="date" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="input-category">Category</label>
+            <select class="form-input form-select" id="input-category"></select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Priority</label>
+          <div class="priority-group">
+            <button class="priority-btn active" data-priority="low">Low</button>
+            <button class="priority-btn" data-priority="medium">Medium</button>
+            <button class="priority-btn" data-priority="high">High</button>
+          </div>
+        </div>
+
+        <button class="btn-primary" id="btn-add-task">Save task</button>
+        <p class="form-success hidden" id="form-success">✓ Task added!</p>
+
+      </div>
+
+    </section>
+
+    <!-- ======== PAGE: ARCHIVE ======== -->
+    <section class="page" id="page-archive">
+
+      <header class="page-header">
+        <div>
+          <p class="page-date">Completed</p>
+          <h1 class="page-title">Archive.</h1>
+        </div>
+        <!-- Archive task count -->
+        <div class="header-stats">
+          <div class="stat-pill done" id="stat-archive-count">
+            <span class="stat-num" id="archive-count-num">0</span>
+            <span class="stat-label">completed</span>
+          </div>
+        </div>
+      </header>
+
+      <div class="placeholder-block">
+        <p class="placeholder-title">Completed tasks live here.</p>
+        <p class="placeholder-sub">Click ↩ on any card to mark it undone and move it back to Agenda.</p>
+      </div>
+
+      <div class="task-list" id="archive-list"></div>
+
+    </section>
+
+    <!-- ======== PAGE: NOTES ======== -->
+    <section class="page" id="page-notes">
+
+      <header class="page-header">
+        <div>
+          <p class="page-date">Quick thoughts</p>
+          <h1 class="page-title">Notes.</h1>
+        </div>
+      </header>
+
+      <div class="placeholder-block">
+        <p class="placeholder-title">This page is yours to shape.</p>
+        <p class="placeholder-sub">Your notes are saved automatically in the browser.</p>
+      </div>
+
+      <div class="notes-area-wrap">
+        <textarea class="notes-textarea" id="notes-textarea" placeholder="Start typing…"></textarea>
+        <div class="notes-footer">
+          <p class="notes-hint" id="notes-charcount">0 characters</p>
+          <p class="notes-hint" id="notes-saved-status">Saved</p>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ======== PAGE: SETTINGS ======== -->
+    <section class="page" id="page-settings">
+
+      <header class="page-header">
+        <div>
+          <p class="page-date">Preferences</p>
+          <h1 class="page-title">Settings.</h1>
+        </div>
+      </header>
+
+      <!-- Profile -->
+      <div class="settings-section">
+        <h2 class="settings-heading">Profile</h2>
+        <div class="form-card settings-card">
+          <div class="form-group">
+            <label class="form-label" for="settings-displayname">Display name (shown in greeting)</label>
+            <input class="form-input" id="settings-displayname" type="text" maxlength="40" />
+          </div>
+          <button class="btn-primary" id="btn-save-displayname">Save name</button>
+          <p class="form-success hidden" id="displayname-success">✓ Name updated!</p>
+        </div>
+      </div>
+
+      <!-- Change password -->
+      <div class="settings-section">
+        <h2 class="settings-heading">Change password</h2>
+        <div class="form-card settings-card">
+          <div class="form-group">
+            <label class="form-label" for="settings-cur-pw">Current password</label>
+            <input class="form-input" id="settings-cur-pw" type="password" placeholder="Enter current password" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="settings-new-pw">New password</label>
+            <input class="form-input" id="settings-new-pw" type="password" placeholder="New password" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="settings-new-pw2">Confirm new password</label>
+            <input class="form-input" id="settings-new-pw2" type="password" placeholder="Repeat new password" />
+          </div>
+          <p class="login-error hidden" id="pw-change-error"></p>
+          <button class="btn-primary" id="btn-change-pw">Update password</button>
+          <p class="form-success hidden" id="pw-change-success">✓ Password updated!</p>
+        </div>
+      </div>
+
+      <!-- Category labels -->
+      <div class="settings-section">
+        <h2 class="settings-heading">Category labels</h2>
+        <p class="settings-sub">Rename the four categories. Colours stay the same.</p>
+        <div class="form-card settings-card">
+          <div class="category-rename-grid">
+
+            <div class="cat-row">
+              <span class="cat-swatch" style="background:#ede8f7; color:#8a6bbf;">◈</span>
+              <div class="form-group cat-input-wrap">
+                <label class="form-label" for="cat-label-personal">Category 1 (purple)</label>
+                <input class="form-input" id="cat-label-personal" type="text" data-cat="personal" maxlength="24" />
+              </div>
+            </div>
+
+            <div class="cat-row">
+              <span class="cat-swatch" style="background:#e5ecf7; color:#4a72a8;">◈</span>
+              <div class="form-group cat-input-wrap">
+                <label class="form-label" for="cat-label-work">Category 2 (blue)</label>
+                <input class="form-input" id="cat-label-work" type="text" data-cat="work" maxlength="24" />
+              </div>
+            </div>
+
+            <div class="cat-row">
+              <span class="cat-swatch" style="background:#f7ebe8; color:#c0553a;">◈</span>
+              <div class="form-group cat-input-wrap">
+                <label class="form-label" for="cat-label-urgent">Category 3 (red)</label>
+                <input class="form-input" id="cat-label-urgent" type="text" data-cat="urgent" maxlength="24" />
+              </div>
+            </div>
+
+            <div class="cat-row">
+              <span class="cat-swatch" style="background:#f0ece4; color:#8a8580;">◈</span>
+              <div class="form-group cat-input-wrap">
+                <label class="form-label" for="cat-label-other">Category 4 (neutral)</label>
+                <input class="form-input" id="cat-label-other" type="text" data-cat="other" maxlength="24" />
+              </div>
+            </div>
+
+          </div>
+          <button class="btn-primary" id="btn-save-categories">Save labels</button>
+          <p class="form-success hidden" id="cat-success">✓ Labels saved!</p>
+        </div>
+      </div>
+
+      <!-- Data management -->
+      <div class="settings-section">
+        <h2 class="settings-heading">Data</h2>
+        <p class="settings-sub">Export a backup of all your tasks, or import a previously exported file.</p>
+        <div class="form-card settings-card">
+          <div class="data-btns">
+            <button class="btn-secondary" id="btn-export">⬇ Export tasks (JSON)</button>
+            <label class="btn-secondary btn-import-label" for="import-file-input">⬆ Import tasks (JSON)</label>
+            <input type="file" id="import-file-input" accept=".json" style="display:none" />
+          </div>
+          <p class="form-success hidden" id="import-success">✓ Tasks imported!</p>
+          <p class="login-error hidden" id="import-error">Invalid file format.</p>
+        </div>
+      </div>
+
+      <!-- Danger zone -->
+      <div class="settings-section">
+        <h2 class="settings-heading danger-heading">Danger zone</h2>
+        <div class="form-card settings-card">
+          <p class="settings-sub" style="margin-bottom:16px">This will permanently delete all your tasks and cannot be undone.</p>
+          <button class="btn-danger" id="btn-clear-tasks">Delete all tasks</button>
+        </div>
+      </div>
+
+    </section>
+
+  </main><!-- /content -->
+
+  <script src="script.js"></script>
+</body>
+</html>
