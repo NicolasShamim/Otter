@@ -3,7 +3,7 @@
    Sections:
    1.  Variables & Reset
    2.  Layout
-   3.  Login Overlay
+   3.  Auth Overlay (login / register / loading)
    4.  Sidebar
    5.  Page Header & Stats
    6.  Toolbar (filter + sort)
@@ -71,7 +71,7 @@ body {
 }
 
 
-/* ── 3. LOGIN OVERLAY ──────────────────────────────────────── */
+/* ── 3. AUTH OVERLAY ───────────────────────────────────────── */
 .login-overlay {
   position: fixed;
   inset: 0;
@@ -89,10 +89,11 @@ body {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 52px 48px;
+  padding: 48px 44px;
   width: 100%;
-  max-width: 400px;
+  max-width: 420px;
   box-shadow: 0 8px 40px rgba(0,0,0,0.07);
+  text-align: center;
 }
 
 .login-logo-dot {
@@ -105,20 +106,21 @@ body {
 
 .login-title {
   font-family: var(--font-display);
-  font-size: 2.2rem;
+  font-size: 2.1rem;
   font-weight: 400;
   margin-bottom: 6px;
-  text-align: center;
 }
 
 .login-sub {
   font-size: 0.85rem;
   color: var(--text-muted);
   margin-bottom: 28px;
-  text-align: center;
 }
 
-.login-field { margin-bottom: 16px; }
+.login-field {
+  margin-bottom: 16px;
+  text-align: left;
+}
 
 .login-label {
   display: block;
@@ -128,6 +130,12 @@ body {
   letter-spacing: 0.07em;
   color: var(--text-muted);
   margin-bottom: 7px;
+}
+
+.login-hint {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-top: 5px;
 }
 
 .login-input {
@@ -145,7 +153,8 @@ body {
 
 .login-input:focus { border-color: var(--accent); }
 
-.login-error {
+/* Error message block inside auth cards */
+.auth-error {
   font-size: 0.8rem;
   color: var(--overdue-color);
   margin-bottom: 12px;
@@ -153,6 +162,7 @@ body {
   background: #fdf1ee;
   border-radius: var(--radius-sm);
   border: 1px solid #f3d0c8;
+  text-align: left;
 }
 
 .login-btn {
@@ -166,12 +176,46 @@ body {
   padding: 13px;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  margin-top: 8px;
+  margin-top: 4px;
   letter-spacing: 0.02em;
   transition: opacity 0.15s;
 }
 
 .login-btn:hover { opacity: 0.85; }
+
+/* "Already have an account? Sign in" row */
+.auth-switch {
+  margin-top: 20px;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+/* Inline text button for switching panels */
+.auth-link {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0;
+}
+
+.auth-link:hover { opacity: 0.7; }
+
+/* Loading spinner */
+.spinner {
+  width: 28px; height: 28px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  margin: 20px auto 0;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
 
 
 /* ── 4. SIDEBAR ────────────────────────────────────────────── */
@@ -223,7 +267,6 @@ body {
 
 .nav-icon { font-size: 0.95rem; width: 18px; text-align: center; }
 
-/* Overdue badge on the Archive nav item */
 .nav-badge {
   margin-left: auto;
   background: var(--overdue-color);
@@ -322,15 +365,13 @@ body {
 .stat-pill.done         .stat-num { color: var(--done-color); }
 .stat-pill.due          .stat-num { color: var(--due-color); }
 .stat-pill.overdue-pill .stat-num { color: var(--overdue-color); }
-
-/* Hide overdue stat when 0 */
-.stat-pill.overdue-pill.zero { opacity: 0.35; }
+.stat-pill.overdue-pill.zero      { opacity: 0.35; }
 
 .stat-num   { font-family: var(--font-display); font-size: 1.4rem; line-height: 1; }
 .stat-label { font-size: 0.68rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 2px; }
 
 
-/* ── 6. TOOLBAR (filter + sort) ────────────────────────────── */
+/* ── 6. TOOLBAR ────────────────────────────────────────────── */
 .toolbar {
   display: flex;
   align-items: flex-start;
@@ -340,12 +381,7 @@ body {
   flex-wrap: wrap;
 }
 
-.filter-bar {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  flex: 1;
-}
+.filter-bar { display: flex; gap: 8px; flex-wrap: wrap; flex: 1; }
 
 .filter-btn {
   border: 1px solid var(--border);
@@ -363,7 +399,6 @@ body {
 .filter-btn:hover  { border-color: var(--accent); color: var(--text); }
 .filter-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 
-/* Small count badge inside filter button */
 .filter-count {
   display: inline-block;
   background: rgba(0,0,0,0.12);
@@ -377,19 +412,8 @@ body {
 
 .filter-btn.active .filter-count { background: rgba(255,255,255,0.25); }
 
-.sort-wrap {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.sort-label {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
+.sort-wrap  { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.sort-label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
 
 .sort-select {
   background: var(--surface);
@@ -421,26 +445,12 @@ body {
   transition: box-shadow 0.15s, transform 0.15s;
 }
 
-.task-card:hover {
-  box-shadow: 0 4px 16px rgba(0,0,0,0.06);
-  transform: translateY(-1px);
-}
-
-/* Due today — subtle left accent bar */
-.task-card.due-today {
-  border-left: 3px solid var(--due-color);
-}
-
-/* Overdue — red left bar */
-.task-card.is-overdue {
-  border-left: 3px solid var(--overdue-color);
-}
-
-/* Done state */
-.task-card.is-done { opacity: 0.5; }
+.task-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.06); transform: translateY(-1px); }
+.task-card.due-today  { border-left: 3px solid var(--due-color); }
+.task-card.is-overdue { border-left: 3px solid var(--overdue-color); }
+.task-card.is-done    { opacity: 0.5; }
 .task-card.is-done .task-title { text-decoration: line-through; color: var(--text-muted); }
 
-/* Checkbox circle */
 .task-check {
   width: 22px; height: 22px;
   border-radius: 50%;
@@ -454,50 +464,37 @@ body {
   transition: background 0.15s, border-color 0.15s;
 }
 
-.task-check:hover  { border-color: var(--done-color); }
+.task-check:hover   { border-color: var(--done-color); }
 .task-check.checked { background: var(--done-color); border-color: var(--done-color); }
 .task-check.checked::after { content: '✓'; color: #fff; font-size: 0.7rem; }
 
-.task-body { flex: 1; min-width: 0; }
+.task-body  { flex: 1; min-width: 0; }
 .task-title { font-size: 0.95rem; font-weight: 500; margin-bottom: 4px; }
 .task-desc  { font-size: 0.82rem; color: var(--text-muted); margin-bottom: 8px; white-space: pre-wrap; }
 
-.task-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.task-meta  { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .task-date  { font-size: 0.75rem; color: var(--text-muted); }
 
-/* "Overdue" inline tag shown in task meta */
 .task-overdue-tag {
-  font-size: 0.68rem;
-  font-weight: 600;
-  color: var(--overdue-color);
-  background: #fdf1ee;
+  font-size: 0.68rem; font-weight: 600;
+  color: var(--overdue-color); background: #fdf1ee;
   border: 1px solid #f3d0c8;
-  padding: 1px 8px;
-  border-radius: 99px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  padding: 1px 8px; border-radius: 99px;
+  text-transform: uppercase; letter-spacing: 0.04em;
 }
 
-/* "Due today" inline tag */
 .task-due-tag {
-  font-size: 0.68rem;
-  font-weight: 600;
-  color: var(--due-color);
-  background: #fdf8ee;
+  font-size: 0.68rem; font-weight: 600;
+  color: var(--due-color); background: #fdf8ee;
   border: 1px solid #f0dfa0;
-  padding: 1px 8px;
-  border-radius: 99px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  padding: 1px 8px; border-radius: 99px;
+  text-transform: uppercase; letter-spacing: 0.04em;
 }
 
 .task-badge {
-  font-size: 0.68rem;
-  font-weight: 500;
-  padding: 2px 10px;
-  border-radius: 99px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  font-size: 0.68rem; font-weight: 500;
+  padding: 2px 10px; border-radius: 99px;
+  text-transform: uppercase; letter-spacing: 0.05em;
 }
 
 .task-badge[data-category="personal"] { background: #ede8f7; color: var(--personal-color); }
@@ -506,12 +503,9 @@ body {
 .task-badge[data-category="other"]    { background: var(--accent-light); color: var(--text-muted); }
 
 .task-priority {
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  flex-shrink: 0;
-  opacity: 0.6;
+  font-size: 0.7rem; font-weight: 600;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  flex-shrink: 0; opacity: 0.6;
 }
 
 .task-priority[data-priority="high"]   { color: var(--overdue-color); opacity: 1; }
@@ -521,21 +515,17 @@ body {
 .task-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
 
 .task-delete, .task-undo {
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 4px 5px;
-  font-size: 0.9rem;
-  line-height: 1;
+  background: none; border: none;
+  cursor: pointer; padding: 4px 5px;
+  font-size: 0.9rem; line-height: 1;
   border-radius: 6px;
   transition: background 0.12s, color 0.12s;
 }
 
-.task-delete { color: var(--border); }
+.task-delete       { color: var(--border); }
 .task-delete:hover { color: var(--overdue-color); background: #fdf1ee; }
-
-.task-undo { color: rgba(0,0,0,0.2); font-size: 1rem; }
-.task-undo:hover { color: var(--done-color); background: #edf6ef; }
+.task-undo         { color: rgba(0,0,0,0.2); font-size: 1rem; }
+.task-undo:hover   { color: var(--done-color); background: #edf6ef; }
 
 
 /* ── 8. EMPTY STATE ────────────────────────────────────────── */
@@ -545,20 +535,16 @@ body {
 
 .btn-ghost {
   border: 1px solid var(--border);
-  background: none;
-  color: var(--text-muted);
-  font-family: var(--font-body);
-  font-size: 0.85rem;
-  padding: 8px 20px;
-  border-radius: 99px;
-  cursor: pointer;
-  transition: all 0.15s;
+  background: none; color: var(--text-muted);
+  font-family: var(--font-body); font-size: 0.85rem;
+  padding: 8px 20px; border-radius: 99px;
+  cursor: pointer; transition: all 0.15s;
 }
 
 .btn-ghost:hover { border-color: var(--accent); color: var(--text); }
 
 
-/* ── 9. ADD TASK FORM ──────────────────────────────────────── */
+/* ── 9. FORMS ──────────────────────────────────────────────── */
 .form-card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -571,27 +557,18 @@ body {
 
 .form-label {
   display: block;
-  font-size: 0.78rem;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  color: var(--text-muted);
-  margin-bottom: 8px;
+  font-size: 0.78rem; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.07em;
+  color: var(--text-muted); margin-bottom: 8px;
 }
 
 .optional { font-weight: 400; text-transform: none; letter-spacing: 0; }
 
 .form-input {
-  width: 100%;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  font-family: var(--font-body);
-  font-size: 0.9rem;
-  color: var(--text);
-  padding: 10px 14px;
-  outline: none;
-  transition: border-color 0.15s;
+  width: 100%; background: var(--bg);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  font-family: var(--font-body); font-size: 0.9rem; color: var(--text);
+  padding: 10px 14px; outline: none; transition: border-color 0.15s;
 }
 
 .form-input:focus  { border-color: var(--accent); }
@@ -602,33 +579,21 @@ body {
 .priority-group { display: flex; gap: 8px; }
 
 .priority-btn {
-  border: 1px solid var(--border);
-  background: var(--bg);
-  color: var(--text-muted);
-  font-family: var(--font-body);
-  font-size: 0.82rem;
-  padding: 7px 18px;
-  border-radius: 99px;
-  cursor: pointer;
-  transition: all 0.15s;
+  border: 1px solid var(--border); background: var(--bg);
+  color: var(--text-muted); font-family: var(--font-body);
+  font-size: 0.82rem; padding: 7px 18px; border-radius: 99px;
+  cursor: pointer; transition: all 0.15s;
 }
 
 .priority-btn:hover  { border-color: var(--accent); color: var(--text); }
 .priority-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 
 .btn-primary {
-  width: 100%;
-  background: var(--accent);
-  color: #fff;
-  border: none;
-  font-family: var(--font-body);
-  font-size: 0.92rem;
-  font-weight: 500;
-  padding: 13px;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  letter-spacing: 0.02em;
-  transition: opacity 0.15s;
+  width: 100%; background: var(--accent); color: #fff;
+  border: none; font-family: var(--font-body);
+  font-size: 0.92rem; font-weight: 500; padding: 13px;
+  border-radius: var(--radius-sm); cursor: pointer;
+  letter-spacing: 0.02em; transition: opacity 0.15s;
 }
 
 .btn-primary:hover { opacity: 0.85; }
@@ -637,12 +602,9 @@ body {
 
 /* ── 10. ARCHIVE & NOTES ───────────────────────────────────── */
 .placeholder-block {
-  background: var(--surface);
-  border: 1px dashed var(--border);
-  border-radius: var(--radius);
-  padding: 24px 32px;
-  margin-bottom: 24px;
-  max-width: 520px;
+  background: var(--surface); border: 1px dashed var(--border);
+  border-radius: var(--radius); padding: 24px 32px;
+  margin-bottom: 24px; max-width: 520px;
 }
 
 .placeholder-title { font-family: var(--font-display); font-size: 1.05rem; margin-bottom: 6px; }
@@ -651,93 +613,61 @@ body {
 .notes-area-wrap { max-width: 620px; }
 
 .notes-textarea {
-  width: 100%;
-  min-height: 340px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  font-family: var(--font-body);
-  font-size: 0.92rem;
-  color: var(--text);
-  padding: 20px 24px;
-  line-height: 1.7;
-  outline: none;
-  resize: vertical;
-  transition: border-color 0.15s;
+  width: 100%; min-height: 340px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); font-family: var(--font-body);
+  font-size: 0.92rem; color: var(--text);
+  padding: 20px 24px; line-height: 1.7;
+  outline: none; resize: vertical; transition: border-color 0.15s;
 }
 
 .notes-textarea:focus { border-color: var(--accent); }
-
-.notes-footer {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 8px;
-}
-
-.notes-hint { font-size: 0.74rem; color: var(--text-muted); }
+.notes-footer { display: flex; justify-content: space-between; margin-top: 8px; }
+.notes-hint   { font-size: 0.74rem; color: var(--text-muted); }
 
 
-/* ── 11. SETTINGS PAGE ─────────────────────────────────────── */
-.settings-section { margin-bottom: 40px; }
+/* ── 11. SETTINGS ──────────────────────────────────────────── */
+.settings-section  { margin-bottom: 40px; }
 
 .settings-heading {
-  font-family: var(--font-display);
-  font-size: 1.15rem;
-  font-weight: 400;
-  margin-bottom: 6px;
+  font-family: var(--font-display); font-size: 1.15rem;
+  font-weight: 400; margin-bottom: 6px;
 }
 
 .settings-sub { font-size: 0.83rem; color: var(--text-muted); margin-bottom: 18px; }
 .settings-card { max-width: 600px; }
 
 .category-rename-grid { display: flex; flex-direction: column; gap: 16px; margin-bottom: 24px; }
-
 .cat-row { display: flex; align-items: center; gap: 16px; }
 
 .cat-swatch {
-  width: 36px; height: 36px;
-  border-radius: var(--radius-sm);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1rem;
-  flex-shrink: 0;
+  width: 36px; height: 36px; border-radius: var(--radius-sm);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1rem; flex-shrink: 0;
 }
 
 .cat-input-wrap { margin: 0; flex: 1; }
 
-/* Data export / import buttons */
 .data-btns { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
 
 .btn-secondary {
-  background: none;
-  border: 1px solid var(--border);
-  color: var(--text);
-  font-family: var(--font-body);
-  font-size: 0.85rem;
-  padding: 10px 18px;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: all 0.15s;
+  background: none; border: 1px solid var(--border); color: var(--text);
+  font-family: var(--font-body); font-size: 0.85rem;
+  padding: 10px 18px; border-radius: var(--radius-sm);
+  cursor: pointer; transition: all 0.15s;
 }
 
 .btn-secondary:hover { border-color: var(--accent); background: var(--accent-light); }
-.btn-import-label { display: inline-flex; align-items: center; }
+.btn-import-label    { display: inline-flex; align-items: center; }
 
-/* Danger zone */
 .danger-heading { color: var(--overdue-color); }
 
 .btn-danger {
-  background: none;
-  border: 1px solid var(--overdue-color);
-  color: var(--overdue-color);
-  font-family: var(--font-body);
-  font-size: 0.88rem;
-  font-weight: 500;
-  padding: 10px 20px;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: all 0.15s;
+  background: none; border: 1px solid var(--overdue-color);
+  color: var(--overdue-color); font-family: var(--font-body);
+  font-size: 0.88rem; font-weight: 500;
+  padding: 10px 20px; border-radius: var(--radius-sm);
+  cursor: pointer; transition: all 0.15s;
 }
 
 .btn-danger:hover { background: var(--overdue-color); color: #fff; }
@@ -761,14 +691,14 @@ body {
 
 @media (max-width: 700px) {
   :root { --sidebar-w: 64px; }
-
   .logo-text, .nav-label, .footer-name, .logout-btn { display: none; }
   .sidebar-logo { justify-content: center; margin-bottom: 32px; }
-  .nav-item      { justify-content: center; padding: 12px; }
-  .content       { padding: 32px 20px; }
-  .page-title    { font-size: 1.9rem; }
-  .form-row      { grid-template-columns: 1fr; }
-  .form-card     { padding: 24px 20px; }
-  .header-stats  { gap: 6px; }
-  .stat-pill     { padding: 6px 10px; min-width: 48px; }
+  .nav-item     { justify-content: center; padding: 12px; }
+  .content      { padding: 32px 20px; }
+  .page-title   { font-size: 1.9rem; }
+  .form-row     { grid-template-columns: 1fr; }
+  .form-card    { padding: 24px 20px; }
+  .header-stats { gap: 6px; }
+  .stat-pill    { padding: 6px 10px; min-width: 48px; }
+  .login-card   { padding: 36px 28px; margin: 20px; }
 }
