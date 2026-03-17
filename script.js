@@ -1,13 +1,32 @@
 /* ============================================================
    SCRIPT.JS — Personal Duties Dashboard
+   Firebase edition — real cloud storage, multi-user
+
+   HOW DATA IS STORED IN FIRESTORE:
+   ─────────────────────────────────────────────────────────
+   Each user gets their own private "folder" in the database:
+
+   users/
+     {userId}/           ← Firebase auto-generates this ID on signup
+       profile/
+         data            ← displayName, categoryLabels
+       tasks/
+         {taskId}        ← one document per task
+       notes/
+         data            ← the notes textarea content
+
+   Firebase Security Rules (set in the console) ensure that
+   user A can NEVER read or write user B's documents.
+   ─────────────────────────────────────────────────────────
+
    Sections:
-   1.  State helpers
-   2.  Crypto — password hashing (SHA-256 via Web Crypto API)
-   3.  Auth — setup, login, logout, session
+   1.  Firebase config  ← PASTE YOUR CONFIG HERE
+   2.  Firebase init
+   3.  Auth — register, login, logout
    4.  Navigation
    5.  Date & Greeting
    6.  Category helpers
-   7.  Task utilities (sort, overdue checks)
+   7.  Task utilities
    8.  Task rendering — Agenda
    9.  Task rendering — Archive
    10. Add Task form
@@ -16,173 +35,189 @@
    13. Notes
    14. Settings
    15. Data export / import
-   16. Init
+   16. App bootstrap (onAuthStateChanged)
    ============================================================ */
 
 
-/* ── 1. STATE HELPERS ──────────────────────────────────────── */
+/* ── 1. FIREBASE CONFIG ────────────────────────────────────── */
+/*
+   INSTRUCTIONS:
+   1. Go to console.firebase.google.com
+   2. Open your project → Project Settings (gear icon)
+   3. Scroll to "Your apps" → click your web app → copy the config
+   4. Replace EVERYTHING between the curly braces below with your values.
+   5. Save the file and push to GitHub. Done.
 
-function loadTasks()      { return JSON.parse(localStorage.getItem('duties_tasks')  || '[]'); }
-function saveTasks(t)     { localStorage.setItem('duties_tasks',  JSON.stringify(t)); }
-function loadDisplayName(){ return localStorage.getItem('duties_displayname') || ''; }
-function saveDisplayName(n){ localStorage.setItem('duties_displayname', n); }
+   These keys are safe to put in public code — Firebase security
+   is enforced by the Firestore Rules you set in the console,
+   not by keeping these keys secret.
+*/
+const firebaseConfig = {
+  apiKey:            "AIzaSyB9w9igjU44U9uE4nekl3HuTG9twyPL-3A",
+  authDomain:        "otter-project-b5df0.firebaseapp.com",
+  projectId:         "otter-project-b5df0",
+  storageBucket:     "otter-project-b5df0.firebasestorage.app",
+  messagingSenderId: "9667554032",
+  appId:             "1:9667554032:web:2a92c1ebd86a0433237035"
+};
 
-const DEFAULT_CATEGORIES = { personal: 'Personal', work: 'Work', urgent: 'Urgent', other: 'Other' };
 
-function loadCategories() {
-  const s = localStorage.getItem('duties_categories');
-  return s ? { ...DEFAULT_CATEGORIES, ...JSON.parse(s) } : { ...DEFAULT_CATEGORIES };
+/* ── 2. FIREBASE INIT ──────────────────────────────────────── */
+
+firebase.initializeApp(firebaseConfig);
+
+const auth = firebase.auth();
+const db   = firebase.firestore();
+
+// Shorthand: get the Firestore path for the current user's data
+// e.g. userDoc('tasks') → db.collection('users').doc(uid).collection('tasks')
+function userCol(colName) {
+  return db.collection('users').doc(auth.currentUser.uid).collection(colName);
 }
-function saveCategories(c){ localStorage.setItem('duties_categories', JSON.stringify(c)); }
 
-// Session flag — lives only in memory (cleared on tab close for real sign-out feel)
-let sessionActive = false;
-
-let activeFilter   = 'all';
-let activeSortMode = 'date-asc';
-
-
-/* ── 2. CRYPTO ─────────────────────────────────────────────── */
-
-// Hash a string with SHA-256, return hex string.
-// Using the browser's built-in Web Crypto API — no library needed.
-async function sha256(str) {
-  const buf  = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+function userProfileDoc() {
+  return db.collection('users').doc(auth.currentUser.uid)
+           .collection('profile').doc('data');
 }
 
 
 /* ── 3. AUTH ───────────────────────────────────────────────── */
 
-// Stored as: { usernameHash, passwordHash, displayName }
-function loadAccount()  { return JSON.parse(localStorage.getItem('duties_account') || 'null'); }
-function saveAccount(a) { localStorage.setItem('duties_account', JSON.stringify(a)); }
+// Firebase Authentication uses email + password internally.
+// We store usernames by converting them to a fake email:
+//   "nicolas" → "nicolas@duties.local"
+// This way users never need a real email address.
 
-const loginOverlay  = document.getElementById('login-overlay');
-const panelSetup    = document.getElementById('panel-setup');
-const panelLogin    = document.getElementById('panel-login');
-
-// Show the right panel depending on whether an account exists
-function showAuthScreen() {
-  loginOverlay.classList.remove('hidden');
-  const account = loadAccount();
-  if (account) {
-    panelSetup.classList.add('hidden');
-    panelLogin.classList.remove('hidden');
-    // Show "Welcome back, Nicolas." if display name is set
-    const name = loadDisplayName() || account.username || '';
-    if (name) {
-      document.getElementById('login-welcome-name').textContent = `Welcome back, ${name}.`;
-    }
-  } else {
-    panelSetup.classList.remove('hidden');
-    panelLogin.classList.add('hidden');
-  }
+function usernameToEmail(username) {
+  // Lowercase and strip anything that isn't a letter, number or hyphen
+  const safe = username.toLowerCase().replace(/[^a-z0-9-]/g, '');
+  return `${safe}@duties.local`;
 }
 
-// ── First-time setup ──
-document.getElementById('btn-setup').addEventListener('click', async () => {
-  const username = document.getElementById('setup-username').value.trim();
-  const password = document.getElementById('setup-password').value;
-  const confirm  = document.getElementById('setup-confirm').value;
-  const errorEl  = document.getElementById('setup-error');
+// DOM refs
+const loginOverlay  = document.getElementById('login-overlay');
+const panelLoading  = document.getElementById('panel-loading');
+const panelLogin    = document.getElementById('panel-login');
+const panelRegister = document.getElementById('panel-register');
 
-  if (!username || !password) {
-    showError(errorEl, 'Please fill in all fields.');
-    return;
-  }
-  if (password !== confirm) {
-    showError(errorEl, 'Passwords do not match.');
-    return;
-  }
-  if (password.length < 4) {
-    showError(errorEl, 'Password must be at least 4 characters.');
-    return;
-  }
+function showPanel(name) {
+  [panelLoading, panelLogin, panelRegister].forEach(p => p.classList.add('hidden'));
+  document.getElementById(`panel-${name}`).classList.remove('hidden');
+}
 
-  const usernameHash = await sha256(username.toLowerCase());
-  const passwordHash = await sha256(password);
-
-  saveAccount({ usernameHash, passwordHash });
-  // Use the username as display name by default (can be changed in Settings)
-  saveDisplayName(username);
-
-  enterDashboard();
+// Switch between login ↔ register panels
+document.getElementById('go-to-register').addEventListener('click', () => {
+  clearAuthErrors();
+  showPanel('register');
 });
 
-// Allow Enter key on setup fields
-['setup-username','setup-password','setup-confirm'].forEach(id => {
-  document.getElementById(id).addEventListener('keydown', e => {
-    if (e.key === 'Enter') document.getElementById('btn-setup').click();
+document.getElementById('go-to-login').addEventListener('click', () => {
+  clearAuthErrors();
+  showPanel('login');
+});
+
+function clearAuthErrors() {
+  ['login-error','reg-error'].forEach(id => {
+    const el = document.getElementById(id);
+    el.classList.add('hidden');
+    el.textContent = '';
   });
+}
+
+// ── Register new account ──────────────────────────────────────
+document.getElementById('btn-register').addEventListener('click', async () => {
+  const username = document.getElementById('reg-username').value.trim();
+  const password = document.getElementById('reg-password').value;
+  const confirm  = document.getElementById('reg-confirm').value;
+  const errEl    = document.getElementById('reg-error');
+
+  // Client-side validation
+  if (!username) { showAuthError(errEl, 'Please choose a username.'); return; }
+  if (!/^[a-zA-Z0-9]+$/.test(username)) { showAuthError(errEl, 'Username can only contain letters and numbers.'); return; }
+  if (password.length < 6) { showAuthError(errEl, 'Password must be at least 6 characters.'); return; }
+  if (password !== confirm) { showAuthError(errEl, 'Passwords do not match.'); return; }
+
+  showPanel('loading');
+
+  try {
+    // Create the Firebase Auth account
+    const cred = await auth.createUserWithEmailAndPassword(
+      usernameToEmail(username), password
+    );
+
+    // Write the user's profile (displayName = username by default) to Firestore
+    await db.collection('users').doc(cred.user.uid)
+            .collection('profile').doc('data')
+            .set({
+              displayName: username,
+              categories: { personal: 'Personal', work: 'Work', urgent: 'Urgent', other: 'Other' },
+              createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+
+    // onAuthStateChanged (section 16) will fire and enter the dashboard
+
+  } catch (err) {
+    showPanel('register');
+    // Translate Firebase error codes into friendly messages
+    if (err.code === 'auth/email-already-in-use') {
+      showAuthError(errEl, 'That username is already taken. Please choose another.');
+    } else {
+      showAuthError(errEl, `Error: ${err.message}`);
+    }
+  }
 });
 
-// ── Returning user login ──
+// ── Sign in ───────────────────────────────────────────────────
 document.getElementById('btn-login').addEventListener('click', async () => {
-  const username  = document.getElementById('login-username').value.trim();
-  const password  = document.getElementById('login-password').value;
-  const errorEl   = document.getElementById('login-error');
-  const account   = loadAccount();
+  const username = document.getElementById('login-username').value.trim();
+  const password = document.getElementById('login-password').value;
+  const errEl    = document.getElementById('login-error');
 
   if (!username || !password) {
-    errorEl.classList.remove('hidden');
-    errorEl.textContent = 'Please enter your username and password.';
-    return;
+    showAuthError(errEl, 'Please enter your username and password.'); return;
   }
 
-  const usernameHash = await sha256(username.toLowerCase());
-  const passwordHash = await sha256(password);
+  showPanel('loading');
 
-  if (usernameHash === account.usernameHash && passwordHash === account.passwordHash) {
-    errorEl.classList.add('hidden');
-    enterDashboard();
-  } else {
-    errorEl.classList.remove('hidden');
-    errorEl.textContent = 'Incorrect username or password.';
-    // Shake the card for feedback
+  try {
+    await auth.signInWithEmailAndPassword(usernameToEmail(username), password);
+    // onAuthStateChanged fires → enterDashboard()
+
+  } catch (err) {
+    showPanel('login');
+    if (['auth/wrong-password','auth/user-not-found','auth/invalid-credential'].includes(err.code)) {
+      showAuthError(errEl, 'Incorrect username or password.');
+    } else {
+      showAuthError(errEl, `Error: ${err.message}`);
+    }
+    // Shake animation on the card
     panelLogin.style.animation = 'none';
-    panelLogin.offsetHeight;
+    void panelLogin.offsetHeight; // force reflow
     panelLogin.style.animation = 'shake 0.3s ease';
   }
 });
 
+// Allow Enter key in login + register fields
 ['login-username','login-password'].forEach(id => {
   document.getElementById(id).addEventListener('keydown', e => {
     if (e.key === 'Enter') document.getElementById('btn-login').click();
   });
 });
-
-// ── Enter dashboard after successful auth ──
-function enterDashboard() {
-  sessionActive = true;
-  loginOverlay.classList.add('hidden');
-
-  const name = loadDisplayName();
-  applyDisplayName(name);
-  setDateAndGreeting();
-  refreshCategoryUI();
-  renderTasks();
-  updateStats();
-}
-
-// ── Sign out ──
-document.getElementById('logout-btn').addEventListener('click', () => {
-  sessionActive = false;
-  // Clear sensitive form fields
-  document.getElementById('login-username').value = '';
-  document.getElementById('login-password').value = '';
-  showAuthScreen();
+['reg-username','reg-password','reg-confirm'].forEach(id => {
+  document.getElementById(id).addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('btn-register').click();
+  });
 });
 
-// Apply display name to sidebar + greeting
-function applyDisplayName(name) {
-  document.getElementById('sidebar-name').textContent = name;
-  document.getElementById('greeting-name').textContent = name ? `, ${name}` : '';
-  document.getElementById('settings-displayname').value = name;
-}
+// ── Sign out ──────────────────────────────────────────────────
+document.getElementById('logout-btn').addEventListener('click', async () => {
+  // Detach any Firestore listeners before signing out
+  detachListeners();
+  await auth.signOut();
+  // onAuthStateChanged → show auth screen
+});
 
-// Helper: show an error message in an element
-function showError(el, msg) {
+function showAuthError(el, msg) {
   el.textContent = msg;
   el.classList.remove('hidden');
 }
@@ -199,8 +234,6 @@ function navigateTo(pageName) {
   if (navItem) navItem.classList.add('active');
   if (page)    page.classList.add('active');
 
-  if (pageName === 'agenda')   renderTasks();
-  if (pageName === 'archive')  renderArchive();
   if (pageName === 'settings') refreshSettingsInputs();
 }
 
@@ -208,7 +241,6 @@ document.querySelectorAll('.nav-item').forEach(item => {
   item.addEventListener('click', () => navigateTo(item.dataset.page));
 });
 
-// Sort select
 document.getElementById('sort-select').addEventListener('change', e => {
   activeSortMode = e.target.value;
   renderTasks();
@@ -220,24 +252,34 @@ document.getElementById('sort-select').addEventListener('change', e => {
 function setDateAndGreeting() {
   const now  = new Date();
   const hour = now.getHours();
-  let greeting = 'morning';
-  if (hour >= 12 && hour < 17) greeting = 'afternoon';
-  if (hour >= 17)               greeting = 'evening';
-  document.getElementById('time-greeting').textContent = greeting;
+  let g = 'morning';
+  if (hour >= 12 && hour < 17) g = 'afternoon';
+  if (hour >= 17)               g = 'evening';
+  document.getElementById('time-greeting').textContent = g;
   document.getElementById('today-date').textContent = now.toLocaleDateString('en-GB', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
   });
 }
 
+function applyDisplayName(name) {
+  document.getElementById('sidebar-name').textContent    = name;
+  document.getElementById('greeting-name').textContent   = name ? `, ${name}` : '';
+  document.getElementById('settings-displayname').value  = name;
+}
+
 
 /* ── 6. CATEGORY HELPERS ───────────────────────────────────── */
 
+const DEFAULT_CATEGORIES = { personal: 'Personal', work: 'Work', urgent: 'Urgent', other: 'Other' };
+
+// In-memory cache of categories loaded from Firestore
+let currentCategories = { ...DEFAULT_CATEGORIES };
+
 function populateCategorySelect() {
-  const cats   = loadCategories();
   const select = document.getElementById('input-category');
   const prev   = select.value;
   select.innerHTML = '';
-  Object.entries(cats).forEach(([key, label]) => {
+  Object.entries(currentCategories).forEach(([key, label]) => {
     const opt = document.createElement('option');
     opt.value = key; opt.textContent = label;
     select.appendChild(opt);
@@ -246,20 +288,16 @@ function populateCategorySelect() {
 }
 
 function populateFilterButtons() {
-  const cats  = loadCategories();
-  const tasks = loadTasks().filter(t => !t.done);
-  const bar   = document.getElementById('filter-bar');
-
-  // Remove previously injected category buttons
+  const bar = document.getElementById('filter-bar');
   bar.querySelectorAll('[data-filter-cat]').forEach(el => el.remove());
 
-  Object.entries(cats).forEach(([key, label]) => {
-    const count = tasks.filter(t => t.category === key).length;
+  Object.entries(currentCategories).forEach(([key, label]) => {
+    const count = currentTasks.filter(t => !t.done && t.category === key).length;
     const btn   = document.createElement('button');
-    btn.className         = 'filter-btn';
+    btn.className = 'filter-btn';
     btn.dataset.filter    = key;
     btn.dataset.filterCat = key;
-    btn.innerHTML         = `${escapeHtml(label)} <span class="filter-count">${count}</span>`;
+    btn.innerHTML = `${escapeHtml(label)} <span class="filter-count">${count}</span>`;
     btn.addEventListener('click', () => {
       document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
@@ -269,34 +307,24 @@ function populateFilterButtons() {
     bar.appendChild(btn);
   });
 
-  // Update counts on the static All / Today / Overdue buttons
   updateStaticFilterCounts();
 }
 
 function updateStaticFilterCounts() {
-  const tasks   = loadTasks().filter(t => !t.done);
-  const today   = todayStr();
-  const allBtn  = document.querySelector('.filter-btn[data-filter="all"]');
-  const todayBtn= document.querySelector('.filter-btn[data-filter="today"]');
-  const overdueBtn = document.querySelector('.filter-btn[data-filter="overdue"]');
+  const today = todayStr();
+  const pending = currentTasks.filter(t => !t.done);
 
-  if (allBtn) {
-    let span = allBtn.querySelector('.filter-count');
-    if (!span) { span = document.createElement('span'); span.className = 'filter-count'; allBtn.appendChild(span); }
-    span.textContent = tasks.length;
-  }
-  if (todayBtn) {
-    const c = tasks.filter(t => t.date === today).length;
-    let span = todayBtn.querySelector('.filter-count');
-    if (!span) { span = document.createElement('span'); span.className = 'filter-count'; todayBtn.appendChild(span); }
-    span.textContent = c;
-  }
-  if (overdueBtn) {
-    const c = tasks.filter(t => isOverdue(t)).length;
-    let span = overdueBtn.querySelector('.filter-count');
-    if (!span) { span = document.createElement('span'); span.className = 'filter-count'; overdueBtn.appendChild(span); }
-    span.textContent = c;
-  }
+  [
+    { filter: 'all',     count: pending.length },
+    { filter: 'today',   count: pending.filter(t => t.date === today).length },
+    { filter: 'overdue', count: pending.filter(t => isOverdue(t)).length },
+  ].forEach(({ filter, count }) => {
+    const btn = document.querySelector(`.filter-btn[data-filter="${filter}"]`);
+    if (!btn) return;
+    let span = btn.querySelector('.filter-count');
+    if (!span) { span = document.createElement('span'); span.className = 'filter-count'; btn.appendChild(span); }
+    span.textContent = count;
+  });
 }
 
 function refreshCategoryUI() {
@@ -307,51 +335,51 @@ function refreshCategoryUI() {
 
 /* ── 7. TASK UTILITIES ─────────────────────────────────────── */
 
+// In-memory cache of tasks loaded from Firestore listener
+// This avoids re-reading Firestore on every render
+let currentTasks   = [];
+let activeFilter   = 'all';
+let activeSortMode = 'date-asc';
+
 function todayStr() { return new Date().toISOString().split('T')[0]; }
 
 function isOverdue(task) {
-  if (!task.date || task.done) return false;
-  return task.date < todayStr();
+  return !!(task.date && !task.done && task.date < todayStr());
 }
 
 function isDueToday(task) {
   return task.date === todayStr() && !task.done;
 }
 
-// Sort an array of tasks by the active sort mode
 function sortTasks(tasks) {
   const arr = [...tasks];
   switch (activeSortMode) {
     case 'date-asc':
       return arr.sort((a, b) => {
         if (!a.date && !b.date) return 0;
-        if (!a.date) return 1;
-        if (!b.date) return -1;
+        if (!a.date) return 1; if (!b.date) return -1;
         return a.date.localeCompare(b.date);
       });
     case 'date-desc':
       return arr.sort((a, b) => {
         if (!a.date && !b.date) return 0;
-        if (!a.date) return 1;
-        if (!b.date) return -1;
+        if (!a.date) return 1; if (!b.date) return -1;
         return b.date.localeCompare(a.date);
       });
     case 'priority': {
-      const order = { high: 0, medium: 1, low: 2 };
-      return arr.sort((a, b) => (order[a.priority] ?? 2) - (order[b.priority] ?? 2));
+      const o = { high: 0, medium: 1, low: 2 };
+      return arr.sort((a, b) => (o[a.priority] ?? 2) - (o[b.priority] ?? 2));
     }
     case 'added':
-      // IDs are timestamps, so descending ID = most recently added
-      return arr.sort((a, b) => Number(b.id) - Number(a.id));
-    default:
-      return arr;
+      return arr.sort((a, b) => (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0));
+    default: return arr;
   }
 }
 
 function escapeHtml(str) {
   return String(str)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 
@@ -361,14 +389,12 @@ function renderTasks() {
   const list  = document.getElementById('task-list');
   const empty = document.getElementById('empty-state');
 
-  let tasks = loadTasks().filter(t => !t.done);
+  let tasks = currentTasks.filter(t => !t.done);
 
-  // Apply filter
   switch (activeFilter) {
     case 'today':   tasks = tasks.filter(t => isDueToday(t)); break;
     case 'overdue': tasks = tasks.filter(t => isOverdue(t));  break;
     default:
-      // Category filter key
       if (!['all','today','overdue'].includes(activeFilter)) {
         tasks = tasks.filter(t => t.category === activeFilter);
       }
@@ -385,29 +411,22 @@ function renderTasks() {
   }
 
   updateStats();
-  populateFilterButtons(); // refresh counts
+  populateFilterButtons();
 }
 
 
 /* ── 9. TASK RENDERING — ARCHIVE ───────────────────────────── */
 
 function renderArchive() {
-  const done  = sortTasks(loadTasks().filter(t => t.done));
-  const list  = document.getElementById('archive-list');
+  const done = sortTasks(currentTasks.filter(t => t.done));
+  const list = document.getElementById('archive-list');
   list.innerHTML = '';
   done.forEach(task => list.appendChild(createTaskCard(task, true)));
-
-  // Update archive count stat
   document.getElementById('archive-count-num').textContent = done.length;
 }
 
-// Build a single task card DOM element.
-// isArchive = true → show ↩ undo button instead of interactive checkbox
 function createTaskCard(task, isArchive) {
-  const cats  = loadCategories();
-  const card  = document.createElement('div');
-
-  // Build class list
+  const card = document.createElement('div');
   let classes = 'task-card';
   if (task.done)        classes += ' is-done';
   if (isOverdue(task))  classes += ' is-overdue';
@@ -415,22 +434,20 @@ function createTaskCard(task, isArchive) {
   card.className  = classes;
   card.dataset.id = task.id;
 
-  // Date label
   let dateLabel = '';
   if (task.date) {
     const d = new Date(task.date + 'T00:00:00');
     dateLabel = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
   }
 
-  const categoryLabel = cats[task.category] || task.category;
+  const categoryLabel = currentCategories[task.category] || task.category;
 
-  // Inline status tag (overdue or due today)
   let statusTag = '';
-  if (isOverdue(task))  statusTag = `<span class="task-overdue-tag">Overdue</span>`;
+  if (isOverdue(task))       statusTag = `<span class="task-overdue-tag">Overdue</span>`;
   else if (isDueToday(task)) statusTag = `<span class="task-due-tag">Due today</span>`;
 
   card.innerHTML = `
-    <div class="task-check ${task.done ? 'checked' : ''}" title="${isArchive ? 'Click to undo' : 'Mark done'}"></div>
+    <div class="task-check ${task.done ? 'checked' : ''}"></div>
     <div class="task-body">
       <p class="task-title">${escapeHtml(task.title)}</p>
       ${task.desc ? `<p class="task-desc">${escapeHtml(task.desc)}</p>` : ''}
@@ -447,10 +464,8 @@ function createTaskCard(task, isArchive) {
     </div>
   `;
 
-  // Checkbox: toggle done
   card.querySelector('.task-check').addEventListener('click', () => {
-    if (isArchive) undoTask(task.id);
-    else           toggleDone(task.id);
+    isArchive ? undoTask(task.id) : toggleDone(task.id);
   });
 
   const undoBtn = card.querySelector('.task-undo');
@@ -464,21 +479,21 @@ function createTaskCard(task, isArchive) {
   return card;
 }
 
-function toggleDone(id) {
-  const tasks = loadTasks();
-  const task  = tasks.find(t => t.id === id);
-  if (task) { task.done = !task.done; saveTasks(tasks); renderTasks(); updateStats(); }
+// ── Firestore writes ──────────────────────────────────────────
+
+async function toggleDone(id) {
+  const task = currentTasks.find(t => t.id === id);
+  if (!task) return;
+  await userCol('tasks').doc(id).update({ done: !task.done });
+  // The real-time listener will update currentTasks and re-render automatically
 }
 
-function undoTask(id) {
-  const tasks = loadTasks();
-  const task  = tasks.find(t => t.id === id);
-  if (task) { task.done = false; saveTasks(tasks); renderArchive(); updateStats(); }
+async function undoTask(id) {
+  await userCol('tasks').doc(id).update({ done: false });
 }
 
-function deleteTask(id) {
-  saveTasks(loadTasks().filter(t => t.id !== id));
-  renderTasks(); renderArchive(); updateStats();
+async function deleteTask(id) {
+  await userCol('tasks').doc(id).delete();
 }
 
 
@@ -494,7 +509,7 @@ document.querySelectorAll('.priority-btn').forEach(btn => {
   });
 });
 
-document.getElementById('btn-add-task').addEventListener('click', () => {
+document.getElementById('btn-add-task').addEventListener('click', async () => {
   const title    = document.getElementById('input-title').value.trim();
   const desc     = document.getElementById('input-desc').value.trim();
   const date     = document.getElementById('input-date').value;
@@ -502,9 +517,13 @@ document.getElementById('btn-add-task').addEventListener('click', () => {
 
   if (!title) { document.getElementById('input-title').focus(); return; }
 
-  const tasks = loadTasks();
-  tasks.push({ id: Date.now().toString(), title, desc, date, category, priority: selectedPriority, done: false });
-  saveTasks(tasks);
+  // Add the task to Firestore — the real-time listener re-renders the UI
+  await userCol('tasks').add({
+    title, desc, date, category,
+    priority:  selectedPriority,
+    done:      false,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
 
   const msg = document.getElementById('form-success');
   msg.classList.remove('hidden');
@@ -517,12 +536,8 @@ document.getElementById('btn-add-task').addEventListener('click', () => {
   selectedPriority = 'low';
   document.querySelectorAll('.priority-btn').forEach(b => b.classList.remove('active'));
   document.querySelector('.priority-btn[data-priority="low"]').classList.add('active');
-
-  updateStats();
-  refreshCategoryUI();
 });
 
-// Also allow Enter in the title field to submit
 document.getElementById('input-title').addEventListener('keydown', e => {
   if (e.key === 'Enter') document.getElementById('btn-add-task').click();
 });
@@ -530,7 +545,6 @@ document.getElementById('input-title').addEventListener('keydown', e => {
 
 /* ── 11. FILTERS ───────────────────────────────────────────── */
 
-// Static filter buttons (All, Today, Overdue)
 document.querySelectorAll('#filter-bar .filter-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
@@ -544,30 +558,27 @@ document.querySelectorAll('#filter-bar .filter-btn').forEach(btn => {
 /* ── 12. STATS & NAV BADGES ────────────────────────────────── */
 
 function updateStats() {
-  const tasks   = loadTasks();
-  const pending = tasks.filter(t => !t.done).length;
-  const done    = tasks.filter(t => t.done).length;
-  const dueToday= tasks.filter(t => isDueToday(t)).length;
-  const overdue = tasks.filter(t => isOverdue(t)).length;
+  const tasks    = currentTasks;
+  const pending  = tasks.filter(t => !t.done).length;
+  const done     = tasks.filter(t => t.done).length;
+  const dueToday = tasks.filter(t => isDueToday(t)).length;
+  const overdue  = tasks.filter(t => isOverdue(t)).length;
 
-  document.querySelector('#stat-pending .stat-num').textContent  = pending;
-  document.querySelector('#stat-done .stat-num').textContent     = done;
-  document.querySelector('#stat-due-today .stat-num').textContent= dueToday;
-  document.querySelector('#stat-overdue .stat-num').textContent  = overdue;
+  document.querySelector('#stat-pending .stat-num').textContent   = pending;
+  document.querySelector('#stat-done .stat-num').textContent      = done;
+  document.querySelector('#stat-due-today .stat-num').textContent = dueToday;
+  document.querySelector('#stat-overdue .stat-num').textContent   = overdue;
+  document.getElementById('stat-overdue').classList.toggle('zero', overdue === 0);
 
-  // Dim the overdue pill when 0
-  const overduePill = document.getElementById('stat-overdue');
-  overduePill.classList.toggle('zero', overdue === 0);
-
-  // Overdue badge on agenda nav item (shown when > 0)
-  let navBadge = document.querySelector('.nav-item[data-page="agenda"] .nav-badge');
-  if (!navBadge) {
-    navBadge = document.createElement('span');
-    navBadge.className = 'nav-badge';
-    document.querySelector('.nav-item[data-page="agenda"]').appendChild(navBadge);
+  // Overdue badge on the Agenda nav item
+  let badge = document.querySelector('.nav-item[data-page="agenda"] .nav-badge');
+  if (!badge) {
+    badge = document.createElement('span');
+    badge.className = 'nav-badge';
+    document.querySelector('.nav-item[data-page="agenda"]').appendChild(badge);
   }
-  navBadge.textContent = overdue;
-  navBadge.classList.toggle('hidden', overdue === 0);
+  badge.textContent = overdue;
+  badge.classList.toggle('hidden', overdue === 0);
 }
 
 
@@ -578,17 +589,23 @@ const notesCharCount   = document.getElementById('notes-charcount');
 const notesSavedStatus = document.getElementById('notes-saved-status');
 let   notesSaveTimer;
 
-notesArea.value = localStorage.getItem('duties_notes') || '';
-updateNotesMeta();
+// Load notes from Firestore once
+async function loadNotes() {
+  const doc = await userCol('notes').doc('data').get();
+  if (doc.exists) {
+    notesArea.value = doc.data().content || '';
+    updateNotesMeta();
+  }
+}
 
 notesArea.addEventListener('input', () => {
   updateNotesMeta();
   notesSavedStatus.textContent = 'Saving…';
   clearTimeout(notesSaveTimer);
-  notesSaveTimer = setTimeout(() => {
-    localStorage.setItem('duties_notes', notesArea.value);
+  notesSaveTimer = setTimeout(async () => {
+    await userCol('notes').doc('data').set({ content: notesArea.value });
     notesSavedStatus.textContent = 'Saved';
-  }, 600);
+  }, 800); // debounce — wait 800ms after last keystroke before writing to Firestore
 });
 
 function updateNotesMeta() {
@@ -600,13 +617,12 @@ function updateNotesMeta() {
 /* ── 14. SETTINGS ──────────────────────────────────────────── */
 
 function refreshSettingsInputs() {
-  document.getElementById('settings-displayname').value = loadDisplayName();
-  const cats = loadCategories();
+  document.getElementById('settings-displayname').value = document.getElementById('sidebar-name').textContent;
+  const cats = currentCategories;
   Object.keys(DEFAULT_CATEGORIES).forEach(key => {
     const el = document.getElementById(`cat-label-${key}`);
-    if (el) el.value = cats[key];
+    if (el) el.value = cats[key] || '';
   });
-  // Clear password fields
   ['settings-cur-pw','settings-new-pw','settings-new-pw2'].forEach(id => {
     document.getElementById(id).value = '';
   });
@@ -615,65 +631,69 @@ function refreshSettingsInputs() {
 }
 
 // Save display name
-document.getElementById('btn-save-displayname').addEventListener('click', () => {
+document.getElementById('btn-save-displayname').addEventListener('click', async () => {
   const name = document.getElementById('settings-displayname').value.trim();
   if (!name) return;
-  saveDisplayName(name);
+  await userProfileDoc().update({ displayName: name });
   applyDisplayName(name);
-  setDateAndGreeting();
   showSuccess('displayname-success');
 });
 
-// Change password
+// Change password (Firebase re-authentication required)
 document.getElementById('btn-change-pw').addEventListener('click', async () => {
   const curPw  = document.getElementById('settings-cur-pw').value;
   const newPw  = document.getElementById('settings-new-pw').value;
   const newPw2 = document.getElementById('settings-new-pw2').value;
   const errEl  = document.getElementById('pw-change-error');
-  const account= loadAccount();
 
-  const curHash = await sha256(curPw);
-  if (curHash !== account.passwordHash) {
-    showError(errEl, 'Current password is incorrect.'); return;
-  }
-  if (newPw.length < 4) {
-    showError(errEl, 'New password must be at least 4 characters.'); return;
-  }
-  if (newPw !== newPw2) {
-    showError(errEl, 'New passwords do not match.'); return;
-  }
+  if (newPw.length < 6) { showAuthError(errEl, 'Password must be at least 6 characters.'); return; }
+  if (newPw !== newPw2)  { showAuthError(errEl, 'New passwords do not match.'); return; }
 
-  errEl.classList.add('hidden');
-  account.passwordHash = await sha256(newPw);
-  saveAccount(account);
-  ['settings-cur-pw','settings-new-pw','settings-new-pw2'].forEach(id => {
-    document.getElementById(id).value = '';
-  });
-  showSuccess('pw-change-success');
+  try {
+    // Firebase requires re-authentication before changing password
+    const user       = auth.currentUser;
+    const credential = firebase.auth.EmailAuthProvider.credential(user.email, curPw);
+    await user.reauthenticateWithCredential(credential);
+    await user.updatePassword(newPw);
+
+    errEl.classList.add('hidden');
+    ['settings-cur-pw','settings-new-pw','settings-new-pw2'].forEach(id => {
+      document.getElementById(id).value = '';
+    });
+    showSuccess('pw-change-success');
+
+  } catch (err) {
+    if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+      showAuthError(errEl, 'Current password is incorrect.');
+    } else {
+      showAuthError(errEl, `Error: ${err.message}`);
+    }
+  }
 });
 
 // Save category labels
-document.getElementById('btn-save-categories').addEventListener('click', () => {
-  const cats = loadCategories();
+document.getElementById('btn-save-categories').addEventListener('click', async () => {
+  const updated = { ...currentCategories };
   Object.keys(DEFAULT_CATEGORIES).forEach(key => {
     const el = document.getElementById(`cat-label-${key}`);
-    if (el && el.value.trim()) cats[key] = el.value.trim();
+    if (el && el.value.trim()) updated[key] = el.value.trim();
   });
-  saveCategories(cats);
+  await userProfileDoc().update({ categories: updated });
+  currentCategories = updated;
   refreshCategoryUI();
   renderTasks();
   renderArchive();
   showSuccess('cat-success');
 });
 
-// Delete all tasks (danger zone)
-document.getElementById('btn-clear-tasks').addEventListener('click', () => {
-  if (confirm('Delete ALL tasks permanently? This cannot be undone.')) {
-    saveTasks([]);
-    renderTasks();
-    renderArchive();
-    updateStats();
-  }
+// Delete all tasks
+document.getElementById('btn-clear-tasks').addEventListener('click', async () => {
+  if (!confirm('Delete ALL tasks permanently? This cannot be undone.')) return;
+  const batch = db.batch();
+  const snap  = await userCol('tasks').get();
+  snap.forEach(doc => batch.delete(doc.ref));
+  await batch.commit();
+  // Listener will update currentTasks automatically
 });
 
 function showSuccess(id) {
@@ -685,74 +705,130 @@ function showSuccess(id) {
 
 /* ── 15. DATA EXPORT / IMPORT ──────────────────────────────── */
 
-// Export tasks as a downloadable JSON file
 document.getElementById('btn-export').addEventListener('click', () => {
-  const tasks    = loadTasks();
-  const cats     = loadCategories();
-  const payload  = { exportedAt: new Date().toISOString(), categories: cats, tasks };
-  const blob     = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-  const url      = URL.createObjectURL(blob);
-  const a        = document.createElement('a');
-  const dateStr  = new Date().toISOString().slice(0,10);
-  a.href         = url;
-  a.download     = `duties-backup-${dateStr}.json`;
+  const payload = {
+    exportedAt: new Date().toISOString(),
+    categories: currentCategories,
+    tasks:      currentTasks.map(t => ({
+      id: t.id, title: t.title, desc: t.desc,
+      date: t.date, category: t.category,
+      priority: t.priority, done: t.done
+    }))
+  };
+  const blob    = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url     = URL.createObjectURL(blob);
+  const a       = document.createElement('a');
+  a.href        = url;
+  a.download    = `duties-backup-${new Date().toISOString().slice(0,10)}.json`;
   a.click();
   URL.revokeObjectURL(url);
 });
 
-// Import tasks from a JSON file
-document.getElementById('import-file-input').addEventListener('change', e => {
+document.getElementById('import-file-input').addEventListener('change', async e => {
   const file = e.target.files[0];
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = ev => {
+  reader.onload = async ev => {
     try {
-      const data = JSON.parse(ev.target.result);
-      // Accept either the wrapped format { tasks: [...] } or a raw array
+      const data     = JSON.parse(ev.target.result);
       const incoming = Array.isArray(data) ? data : data.tasks;
-      if (!Array.isArray(incoming)) throw new Error('Invalid format');
+      if (!Array.isArray(incoming)) throw new Error('bad format');
 
-      // Merge: add tasks that don't already exist (by id)
-      const existing = loadTasks();
-      const existingIds = new Set(existing.map(t => t.id));
-      const merged = [...existing, ...incoming.filter(t => t.id && !existingIds.has(t.id))];
-      saveTasks(merged);
+      const existingIds = new Set(currentTasks.map(t => t.id));
+      const batch       = db.batch();
 
-      // Also import category labels if present
-      if (data.categories && typeof data.categories === 'object') {
-        const cats = loadCategories();
-        saveCategories({ ...cats, ...data.categories });
-        refreshCategoryUI();
-      }
+      incoming.forEach(t => {
+        if (!t.title) return; // skip invalid entries
+        if (t.id && existingIds.has(t.id)) return; // skip duplicates
+        const ref = userCol('tasks').doc();
+        batch.set(ref, {
+          title:    t.title || '',
+          desc:     t.desc  || '',
+          date:     t.date  || '',
+          category: t.category || 'other',
+          priority: t.priority || 'low',
+          done:     t.done  || false,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      });
 
-      renderTasks(); renderArchive(); updateStats();
+      await batch.commit();
       document.getElementById('import-error').classList.add('hidden');
       showSuccess('import-success');
+
     } catch {
       document.getElementById('import-success').classList.add('hidden');
       document.getElementById('import-error').classList.remove('hidden');
     }
-    // Reset file input so same file can be re-imported if needed
     e.target.value = '';
   };
   reader.readAsText(file);
 });
 
 
-/* ── 16. INIT ──────────────────────────────────────────────── */
+/* ── 16. APP BOOTSTRAP ─────────────────────────────────────── */
 
-(function init() {
-  setDateAndGreeting();
+// This is the heart of the app.
+// Firebase calls this function automatically whenever the login state changes:
+//   - Page load (checks if a session was already active)
+//   - After login / register
+//   - After sign out
+// This replaces the manual init() we had before.
 
-  const account = loadAccount();
-  if (!account) {
-    // First ever visit — show setup screen
-    showAuthScreen();
-  } else {
-    // Account exists — show login screen
-    showAuthScreen();
+let tasksUnsubscribe = null; // holds the Firestore real-time listener so we can detach it
+
+function detachListeners() {
+  if (tasksUnsubscribe) { tasksUnsubscribe(); tasksUnsubscribe = null; }
+}
+
+auth.onAuthStateChanged(async (user) => {
+  if (!user) {
+    // No user logged in — show auth screen
+    detachListeners();
+    loginOverlay.classList.remove('hidden');
+    // Show loading briefly then switch to login panel
+    showPanel('loading');
+    setTimeout(() => {
+      const account = firebase.app().options; // just checking firebase is ready
+      showPanel('login');
+    }, 400);
+    return;
   }
 
-  // Pre-populate category UI so it's ready when user logs in
+  // User is logged in ─────────────────────────────────────────
+  loginOverlay.classList.add('hidden');
+  setDateAndGreeting();
+
+  // Load user profile (display name + category labels)
+  try {
+    const profileSnap = await userProfileDoc().get();
+    if (profileSnap.exists) {
+      const profile = profileSnap.data();
+      applyDisplayName(profile.displayName || '');
+      if (profile.categories) {
+        currentCategories = { ...DEFAULT_CATEGORIES, ...profile.categories };
+      }
+    }
+  } catch (err) {
+    console.warn('Could not load profile:', err);
+  }
+
   refreshCategoryUI();
-})();
+  await loadNotes();
+
+  // Attach a real-time listener to the user's tasks collection.
+  // This means: whenever any task changes in Firestore (from any device),
+  // the UI updates automatically — no page refresh needed.
+  tasksUnsubscribe = userCol('tasks').onSnapshot(snapshot => {
+    // Rebuild the in-memory cache from the snapshot
+    currentTasks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    renderTasks();
+    renderArchive();
+    updateStats();
+  }, err => {
+    console.error('Firestore listener error:', err);
+  });
+});
+
+// Initial date/greeting setup (visible even before login)
+setDateAndGreeting();
